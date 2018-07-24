@@ -1,0 +1,11 @@
+{
+  "name": "super-scalable-bundler",
+  "version": "0.0.0",
+  "license": "MIT",
+  "bin": "cli.js",
+  "dependencies": {
+    "babel-register": "^6.26.0",
+    "chalk": "^2.4.1",
+    "meow": "^5.0.0"
+  }
+}

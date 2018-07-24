@@ -2,9 +2,8 @@
   "presets": [
     ["env", {
       "targets": {
-        "node": "current"
+        "browsers": ["last 1 version"]
       }
-    }],
-    "flow"
+    }]
   ]
 }

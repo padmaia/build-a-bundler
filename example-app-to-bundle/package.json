@@ -1,0 +1,11 @@
+{
+  "name": "example-app-to-bundle",
+  "version": "1.0.0",
+  "license": "MIT",
+  "scripts": {
+    "build": "super-scalable-bundler src/index.js"
+  },
+  "devDependencies": {
+    "super-scalable-bundler": "0.0.0"
+  }
+}

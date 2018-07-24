@@ -4,19 +4,15 @@
   "main": "index.js",
   "license": "MIT",
   "author": "Maia Teegarden <padmaia@me.com>",
-  "bin": "cli.js",
+  "private": true,
+  "workspaces": [
+    "example-app-to-bundle",
+    "super-scalable-bundler"
+  ],
   "scripts": {
-    "bundle": "./cli.js"
+    "do-it": "yarn workspace example-app-to-bundle build"
   },
   "devDependencies": {
-    "ava": "^0.25.0",
-    "babel-preset-env": "^1.7.0",
-    "babel-preset-flow": "^6.23.0",
-    "babel-register": "^6.26.0",
-    "fixturez": "^1.1.0",
-    "flow-bin": "^0.76.0"
-  },
-  "dependencies": {
-    "chalk": "^2.4.1"
+    "babel-preset-env": "^1.7.0"
   }
 }
