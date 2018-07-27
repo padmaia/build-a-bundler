@@ -10,9 +10,13 @@
     "super-scalable-bundler"
   ],
   "scripts": {
-    "do-it": "yarn workspace example-app-to-bundle build"
+    "clean": "rm -rf node_modules **/node_modules",
+    "doit": "yarn workspace example-app-to-bundle build"
   },
   "devDependencies": {
     "babel-preset-env": "^1.7.0"
+  },
+  "dependencies": {
+    "pretty-format": "^23.2.0"
   }
 }

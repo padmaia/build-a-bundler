@@ -3,9 +3,22 @@
   "version": "0.0.0",
   "license": "MIT",
   "bin": "cli.js",
+  "scripts": {
+    "build": "babel src --out-dir lib"
+  },
   "dependencies": {
+    "babel-core": "^6.26.3",
     "babel-register": "^6.26.0",
+    "babel-traverse": "^6.26.0",
+    "babel-types": "^6.26.0",
+    "babylon": "^6.18.0",
+    "babylon-walk": "^1.0.2",
     "chalk": "^2.4.1",
-    "meow": "^5.0.0"
-  }
+    "find-up": "^3.0.0",
+    "meow": "^5.0.0",
+    "mkdirp": "^0.5.1",
+    "p-queue": "^2.4.2",
+    "resolve-from": "^4.0.0"
+  },
+  "devDependencies": {}
 }

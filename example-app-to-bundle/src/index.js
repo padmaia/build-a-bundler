@@ -1,3 +1,8 @@
-const HELLO = "Hello!";
+import React from 'react';
+import { render } from 'react-dom';
 
-export default HELLO;
+import App from './App';
+
+let container = document.getElementById('app');
+
+render(<App />, container);

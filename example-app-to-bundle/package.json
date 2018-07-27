@@ -6,6 +6,11 @@
     "build": "super-scalable-bundler src/index.js"
   },
   "devDependencies": {
+    "babel-preset-react": "^6.24.1",
     "super-scalable-bundler": "0.0.0"
+  },
+  "dependencies": {
+    "react": "^16.4.1",
+    "react-dom": "^16.4.1"
   }
 }

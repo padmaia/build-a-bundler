@@ -4,6 +4,7 @@
       "targets": {
         "browsers": ["last 1 version"]
       }
-    }]
+    }],
+    "react"
   ]
 }
