@@ -11,7 +11,7 @@ import mkdirpCb from 'mkdirp';
 import prettyFormat from 'pretty-format';
 import resolveFrom from 'resolve-from';
 
-// can't use import syntax on babylon
+// can't use import syntax on these
 const babelTypes = require('babel-types');
 const babylon = require('babylon');
 const walk = require('babylon-walk');
@@ -21,6 +21,52 @@ const writeFile = promisify(fs.writeFile);
 const mkdirp = promisify(mkdirpCb);
 
 let currId = 0;
+
+// replace object properties
+function morph(object, newProperties) {
+  for (let key in object) {
+    delete object[key];
+  }
+
+  for (let key in newProperties) {
+    object[key] = newProperties[key];
+  }
+}
+
+// from babel-types. remove when we upgrade to babel 7.
+// https://github.com/babel/babel/blob/0189b387026c35472dccf45d14d58312d249f799/packages/babel-types/src/index.js#L347
+function matchesPattern(member, match, allowPartial) {
+  // not a member expression
+  if (!babelTypes.isMemberExpression(member)) return false;
+
+  const parts = Array.isArray(match) ? match : match.split('.');
+  const nodes = [];
+
+  let node;
+  for (node = member; babelTypes.isMemberExpression(node); node = node.object) {
+    nodes.push(node.property);
+  }
+  nodes.push(node);
+
+  if (nodes.length < parts.length) return false;
+  if (!allowPartial && nodes.length > parts.length) return false;
+
+  for (let i = 0, j = nodes.length - 1; i < parts.length; i++, j--) {
+    const node = nodes[j];
+    let value;
+    if (babelTypes.isIdentifier(node)) {
+      value = node.name;
+    } else if (babelTypes.isStringLiteral(node)) {
+      value = node.value;
+    } else {
+      return false;
+    }
+
+    if (parts[i] !== value) return false;
+  }
+
+  return true;
+};
 
 function evaluateExpression(node) {
   // Wrap the node in a standalone program so we can traverse it
@@ -69,9 +115,7 @@ function isInFalsyBranch(ancestors) {
   // Check if any ancestors are if statements
   let falsyBranch = ancestors.some((node, index) => {
     if (babelTypes.isIfStatement(node)) {
-      console.log('found an if statement');
       let res = evaluateExpression(node.test);
-      console.log(res.confident);
       if (res && res.confident) {
 
         // If the test is truthy, exclude the dep if it is in the alternate branch.
@@ -111,7 +155,6 @@ export default class Bundler {
 
   processAssets() {
     let entryAsset = this.createAsset(this.entryFilePath);
-    this.addToProcessQueue(entryAsset);
 
     return this.processQueue.onIdle();
   }
@@ -123,14 +166,31 @@ export default class Bundler {
   createAsset(filePath) {
     let id = currId++;
     let asset = { id, filePath };
+    this.assetGraph.set(filePath, asset);
+    this.addToProcessQueue(asset);
     return asset;
   }
 
-  async processAsset({ id, filePath }) {
+  async processAsset(asset) {
+    let { id, filePath } = asset;
     let fileContents = await readFile(filePath, 'utf8');
     let originalAst = babylon.parse(fileContents, {
       sourceType: 'module',
       plugins: this.babelFile.parserOpts.plugins
+    });
+
+    // inline environment variables
+    walk.simple(originalAst, {
+      MemberExpression(node) {
+        // Inline environment variables accessed on process.env
+        if (matchesPattern(node.object, 'process.env')) {
+          let key = babelTypes.toComputedKey(node);
+          if (babelTypes.isStringLiteral(key)) {
+            let val = babelTypes.valueToNode(process.env[key.value]);
+            morph(node, val);
+          }
+        }
+      }
     });
 
     let { plugins, presets } = this.babelConfig;
@@ -161,26 +221,19 @@ export default class Bundler {
     dependencyRequests.forEach((moduleRequest) => {
       let srcDir = path.dirname(filePath);
       let dependencyPath = resolveFrom(srcDir, moduleRequest);
-      if (!this.assetGraph.has(dependencyPath)) {
-        let dependencyAsset = this.createAsset(dependencyPath);
-        dependencyMap.set(moduleRequest, dependencyAsset);
-        this.addToProcessQueue(dependencyAsset);
-      }
+
+      let dependencyAsset = this.assetGraph.get(dependencyPath) || this.createAsset(dependencyPath);
+      dependencyMap.set(moduleRequest, dependencyAsset);
     });
 
-    this.assetGraph.set(filePath, {
-      id,
-      code,
-      filePath,
-      dependencyMap,
-    });
+    asset.code = code;
+    asset.dependencyMap = dependencyMap;
   }
 
   async packageAssetsIntoBundles() {
     let modules = '';
 
     this.assetGraph.forEach((asset) => {
-      console.log(asset.id);
       let mapping = {};
       asset.dependencyMap.forEach((depAsset, key) => mapping[key] = depAsset.id);
       modules += `${asset.id}: [
@@ -196,8 +249,6 @@ export default class Bundler {
       (function(modules) {
         console.log(modules)
         function require(id) {
-          console.log(id)
-          console.log(modules[id])
           const [fn, mapping] = modules[id];
 
           function localRequire(name) {
