@@ -1,0 +1,13 @@
+{
+  "name": "example-simple-app",
+  "version": "1.0.0",
+  "license": "MIT",
+  "scripts": {
+    "build": "super-simple-bundler src/index.js",
+    "start": "open ./index.html"
+  },
+  "devDependencies": {
+    "babel-preset-env": "^1.7.0",
+    "super-simple-bundler": "0.0.0"
+  }
+}

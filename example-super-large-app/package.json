@@ -1,0 +1,12 @@
+{
+  "name": "example-super-large-app",
+  "version": "1.0.0",
+  "license": "MIT",
+  "scripts": {
+    "build": "super-scalable-bundler src/index.js"
+  },
+  "devDependencies": {
+    "babel-preset-env": "^1.7.0",
+    "super-scalable-bundler": "0.0.0"
+  }
+}

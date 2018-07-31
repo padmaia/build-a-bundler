@@ -6,17 +6,11 @@
   "author": "Maia Teegarden <padmaia@me.com>",
   "private": true,
   "workspaces": [
-    "example-app-to-bundle",
-    "super-scalable-bundler"
+    "example-*-app",
+    "super-*-bundler"
   ],
   "scripts": {
     "clean": "rm -rf node_modules **/node_modules",
-    "doit": "yarn workspace example-app-to-bundle build"
-  },
-  "devDependencies": {
-    "babel-preset-env": "^1.7.0"
-  },
-  "dependencies": {
-    "pretty-format": "^23.2.0"
+    "doit": "yarn workspace example-super-large-app build"
   }
 }
