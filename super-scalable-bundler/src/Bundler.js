@@ -142,29 +142,5 @@ export default class Bundler {
     }
 
     await appendFile('dist/bundle.js', '})');
-
-    // // wrapper code taken from https://github.com/ronami/minipack/blob/master/src/minipack.js
-    // const result = `
-    //   (function(modules) {
-    //     function require(id) {
-    //       const [fn, mapping] = modules[id];
-
-    //       function localRequire(name) {
-    //         return require(mapping[name]);
-    //       }
-
-    //       const module = { exports : {} };
-
-    //       fn(localRequire, module, module.exports);
-
-    //       return module.exports;
-    //     }
-
-    //     require(0);
-    //   })({${modules}})
-    // `;
-
-    
-    // await writeFile('dist/bundle.js', result, 'utf8');
   }
 }
