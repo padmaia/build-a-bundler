@@ -10,7 +10,7 @@
     "super-*-bundler"
   ],
   "scripts": {
-    "clean": "rm -rf node_modules **/node_modules",
+    "clean": "rm -rf node_modules **/node_modules && rm -rf **/dist",
     "doit": "yarn workspace example-super-large-app build"
   }
 }
