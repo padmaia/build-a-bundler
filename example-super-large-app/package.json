@@ -4,6 +4,7 @@
   "license": "MIT",
   "scripts": {
     "build": "super-scalable-bundler src/index.js",
+    "parcel": "parcel src/index.js",
     "try-to-build": "webpack"
   },
   "devDependencies": {
@@ -13,6 +14,7 @@
   "dependencies": {
     "babel-core": "^6.26.3",
     "babel-loader": "^7.1.5",
+    "parcel": "^1.9.7",
     "webpack": "^4.16.3",
     "webpack-cli": "^3.1.0"
   }

@@ -13,7 +13,7 @@ for (let i = 0; i < 200; i++) {
     fileText += oneMegabyteString;
   }
   fileText += "`";
-  fs.writeFileSync(path.join(cwd, `src/file${i}`), fileText)
+  fs.writeFileSync(path.join(cwd, `src/file${i}.js`), fileText)
   indexText += `import './file${i}'\n`;
 }
 
