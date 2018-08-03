@@ -9,6 +9,8 @@ import findUp from 'find-up';
 import mkdirpCb from 'mkdirp';
 import resolveFrom from 'resolve-from';
 import level from 'level';
+import { fork } from 'child_process';
+import mapObj from 'map-obj';
 
 // can't use import syntax on these
 const babylon = require('babylon');
@@ -23,7 +25,7 @@ let currId = 0;
 export default class Bundler {
   constructor(entryFilePath) {
     this.entryFilePath = entryFilePath;
-    this.processQueue = new PQueue({ concurrency: 25 });
+    this.processQueue = new PQueue({ concurrency: 8 });
     this.assetGraph = new Map();
   }
   
@@ -73,34 +75,32 @@ export default class Bundler {
 
   async processAsset(asset) {
     let { id, filePath } = asset;
-    let fileContents = await readFile(filePath, 'utf8');
-    let ast = babylon.parse(fileContents, {
-      sourceType: 'module',
-      plugins: this.babelFile.parserOpts.plugins
+
+    let { code, dependencyMap } = await this.processInWorker(filePath);
+
+    dependencyMap = mapObj(dependencyMap, (depReq, depPath) => {
+      let depAsset = this.assetGraph.get(depPath) || this.createAsset(depPath);
+      return [depReq, depAsset];
     });
 
-    let dependencyRequests = [];
-    traverse(ast, {
-      ImportDeclaration: ({ node }) => {
-        dependencyRequests.push(node.source.value);
-      },
-    });
-
-    let dependencyMap = new Map();
-    dependencyRequests.forEach((moduleRequest) => {
-      let srcDir = path.dirname(filePath);
-      let dependencyPath = resolveFrom(srcDir, moduleRequest);
-
-      let dependencyAsset = this.assetGraph.get(dependencyPath) || this.createAsset(dependencyPath);
-      dependencyMap.set(moduleRequest, dependencyAsset);
-    });
-
-    let { plugins, presets } = this.babelConfig;
-    let { code } = transformFromAst(ast, null, { plugins, presets });
-
-    // asset.code = code;
     await this.cache.put(`generated:${filePath}`, code);
     asset.dependencyMap = dependencyMap;
+  }
+
+  processInWorker(filePath) {
+    return new Promise((resolve, reject) => {
+      var worker = fork(path.join(__dirname, 'worker.js'));
+      worker.on('message', (msg) => {
+        resolve(msg);
+        worker.kill('SIGINT');
+      });
+
+      worker.on('error', (err) => {
+        reject(new Error('Worker failed to process asset', asset.filePath));
+      });
+
+      worker.send(filePath);
+    });
   }
 
   async packageAssetsIntoBundles() {
@@ -129,8 +129,7 @@ export default class Bundler {
 
     for (let [filePath, asset] of this.assetGraph) {
       let code = await this.cache.get(`generated:${asset.filePath}`);
-      let mapping = {};
-      asset.dependencyMap.forEach((depAsset, key) => mapping[key] = depAsset.id);
+      let mapping = mapObj(asset.dependencyMap, (depRequest, depAsset) => [depRequest, depAsset.id]);
       let moduleWrapper = `${asset.id}: [
         function (require, module, exports) {
           ${code}
