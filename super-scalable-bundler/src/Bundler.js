@@ -75,16 +75,31 @@ export default class Bundler {
 
   async processAsset(asset) {
     let { id, filePath } = asset;
+    let processed = await this.getProcessed(filePath);
 
-    let { code, dependencyMap } = await this.processInWorker(filePath);
+    if (!processed) {
+      processed = await this.processInWorker(filePath);
+      await this.cache.put(`processed:${filePath}`, JSON.stringify(processed));
+    }
 
-    dependencyMap = mapObj(dependencyMap, (depReq, depPath) => {
-      let depAsset = this.assetGraph.get(depPath) || this.createAsset(depPath);
-      return [depReq, depAsset];
+    let { dependencyMap } = processed;
+
+    Object.values(dependencyMap).forEach((depPath) => {
+      if (!this.assetGraph.get(depPath)) this.createAsset(depPath);
     });
+  }
 
-    await this.cache.put(`generated:${filePath}`, code);
-    asset.dependencyMap = dependencyMap;
+  getProcessed(filePath) {
+    return this.cache.get(`processed:${filePath}`)
+      .then(
+        (processed) => {
+          return JSON.parse(processed)
+        },
+        (err) => {
+          if (err.notFound) return null;
+          throw err;
+        }
+      );
   }
 
   processInWorker(filePath) {
@@ -128,8 +143,8 @@ export default class Bundler {
     await writeFile('dist/bundle.js', topWrapper, 'utf8');
 
     for (let [filePath, asset] of this.assetGraph) {
-      let code = await this.cache.get(`generated:${asset.filePath}`);
-      let mapping = mapObj(asset.dependencyMap, (depRequest, depAsset) => [depRequest, depAsset.id]);
+      let { code, dependencyMap } = await this.getProcessed(asset.filePath);
+      let mapping = mapObj(dependencyMap, (depRequest, depAsset) => [depRequest, depAsset.id]);
       let moduleWrapper = `${asset.id}: [
         function (require, module, exports) {
           ${code}
