@@ -1,96 +1,32 @@
-import fs from 'fs';
 import path from 'path';
-import { promisify } from 'util';
 import chalk from 'chalk';
-import traverse from 'babel-traverse';
-import PQueue from 'p-queue';
-import { transformFromAst, File as BabelFile } from 'babel-core';
-import findUp from 'find-up';
-import mkdirpCb from 'mkdirp';
-import resolveFrom from 'resolve-from';
+
+import Querral from './Querral';
+import {
+  writeFile,
+  mkdirp,
+  appendFile,
+} from './fsPromisified';
+import Resolver from './Resolver';
+import AssetProcessor from './AssetProcessor';
 import level from 'level';
-import { fork } from 'child_process';
-import mapObj from 'map-obj';
 
-// can't use import syntax on these
-const babylon = require('babylon');
+let cache = level(path.join(process.cwd(), '.bundler-cache'));
 
-const readFile = promisify(fs.readFile);
-const writeFile = promisify(fs.writeFile);
-const mkdirp = promisify(mkdirpCb);
-const appendFile = promisify(fs.appendFile);
-
-let currId = 0;
-
-export default class Bundler {
-  constructor(entryFilePath) {
-    this.entryFilePath = entryFilePath;
-    this.processQueue = new PQueue({ concurrency: 8 });
-    this.assetGraph = new Map();
-  }
-  
-  async bundle() {
-    await this.init();
-
-    await this.processAssets();
-
-    await this.packageAssetsIntoBundles();
-
-    await this.cleanup();
-
-    console.log(chalk.green('Done!'))
+class AssetReference {
+  constructor(filePath) {
+    this.id = AssetReference.generateId(filePath);
+    this.filePath = filePath;
+    this.depMapping = {};
   }
 
-  async init() {
-    this.cwd = process.cwd();
-    
-    let babelConfigPath = await findUp('.babelrc');
-    this.babelConfig = JSON.parse(await readFile(babelConfigPath));
-    this.babelFile = new BabelFile(this.babelConfig);
-
-    this.cache = level(path.join(this.cwd, '.bundler-cache'));
+  static generateId(filePath) {
+    let regex = new RegExp(`^${process.cwd()}`);
+    return filePath.replace(regex, '');
   }
 
-  async cleanup() {
-    await this.cache.close();
-  }
-
-  processAssets() {
-    let entryAsset = this.createAsset(this.entryFilePath);
-
-    return this.processQueue.onIdle();
-  }
-
-  addToProcessQueue(asset) {
-    this.processQueue.add(() => this.processAsset(asset));
-  }
-
-  createAsset(filePath) {
-    let id = currId++;
-    let asset = { id, filePath };
-    this.assetGraph.set(filePath, asset);
-    this.addToProcessQueue(asset);
-    return asset;
-  }
-
-  async processAsset(asset) {
-    let { id, filePath } = asset;
-    let processed = await this.getProcessed(filePath);
-
-    if (!processed) {
-      processed = await this.processInWorker(filePath);
-      await this.cache.put(`processed:${filePath}`, JSON.stringify(processed));
-    }
-
-    let { dependencyMap } = processed;
-
-    Object.values(dependencyMap).forEach((depPath) => {
-      if (!this.assetGraph.get(depPath)) this.createAsset(depPath);
-    });
-  }
-
-  getProcessed(filePath) {
-    return this.cache.get(`processed:${filePath}`)
+  getProcessed() {
+    return cache.get(`processed:${this.filePath}`)
       .then(
         (processed) => {
           return JSON.parse(processed)
@@ -102,20 +38,76 @@ export default class Bundler {
       );
   }
 
-  processInWorker(filePath) {
-    return new Promise((resolve, reject) => {
-      var worker = fork(path.join(__dirname, 'worker.js'));
-      worker.on('message', (msg) => {
-        resolve(msg);
-        worker.kill('SIGINT');
-      });
+  setProcessed(processed) {
+    return cache.put(`processed:${this.filePath}`, JSON.stringify(processed))
+  }
+}
 
-      worker.on('error', (err) => {
-        reject(new Error('Worker failed to process asset', asset.filePath));
-      });
+class AssetGraph {
+  constructor({ entryPath }) {
+    this.graph = new Map();
+    this.entryAsset = new AssetReference(entryPath);
+    this.graph.set(entryPath, this.entryAsset);
+  }
 
-      worker.send(filePath);
+  get(filePath) {
+    let asset = this.graph.get(filePath);
+    
+    if (!asset) {
+      asset = new AssetReference(filePath);
+      this.graph.set(filePath, asset);
+    }
+
+    return asset;
+  }
+
+  addRelationship({ sourcePath, moduleIdentifier, resolvedPath }) {
+    let asset = this.get(sourcePath);
+    let depAsset = this.get(resolvedPath);
+    asset.depMapping[moduleIdentifier] = depAsset.id;
+  }
+}
+
+export default class Bundler {
+  constructor(entryRequest) {
+    this.entryRequest = entryRequest;
+    this.cwd = process.cwd();
+    
+    this.assetGraph = new AssetGraph({ entryPath: this.cwd })
+    this.resolver = new Resolver();
+    this.assetProcessor = new AssetProcessor();
+
+    this.resolver.on('resolved', (resolvedModuleRequest) => {
+      let { resolvedPath } = resolvedModuleRequest;
+      this.assetGraph.addRelationship(resolvedModuleRequest);
+      let asset = this.assetGraph.get(resolvedPath);
+      this.assetProcessor.process(asset);
     });
+    this.assetProcessor.on('foundDepRequest', (moduleRequest) => this.resolver.resolve(moduleRequest));
+    
+    this.processQuerral = new Querral([
+      this.resolver.queue,
+      this.assetProcessor.queue,
+    ]);
+  }
+  
+  async bundle() {
+    await this.processAssets();
+
+    await this.packageAssetsIntoBundles();
+
+    console.log(chalk.green('Done Done!'));
+  }
+
+  async processAssets() {
+    this.resolver.resolve({
+      sourcePath: this.cwd,
+      moduleIdentifier: this.entryRequest
+    });
+
+    await this.processQuerral.allDone();
+
+    console.log(chalk.green('Done Processing!'))
   }
 
   async packageAssetsIntoBundles() {
@@ -138,23 +130,27 @@ export default class Bundler {
           return module.exports;
         }
 
-        require(0);
+        require("${this.assetGraph.entryAsset.depMapping[this.entryRequest]}");
       })({`; 
     await writeFile('dist/bundle.js', topWrapper, 'utf8');
 
-    for (let [filePath, asset] of this.assetGraph) {
-      let { code, dependencyMap } = await this.getProcessed(asset.filePath);
-      let mapping = mapObj(dependencyMap, (depRequest, depAsset) => [depRequest, depAsset.id]);
-      let moduleWrapper = `${asset.id}: [
-        function (require, module, exports) {
-          ${code}
-        },
-        ${JSON.stringify(mapping)},
-      ],`;
+    for (let [filePath, asset] of this.assetGraph.graph) {
+      if (filePath !== this.cwd) {
+        let { id, depMapping } = asset;
+        let { code } = await asset.getProcessed();
+        let moduleWrapper = `"${id}": [
+          function (require, module, exports) {
+            ${code}
+          },
+          ${JSON.stringify(depMapping)},
+        ],`;
 
-      await appendFile('dist/bundle.js', moduleWrapper);
+        await appendFile('dist/bundle.js', moduleWrapper);
+      }
     }
 
     await appendFile('dist/bundle.js', '})');
+
+    console.log(chalk.green('Done Bundling!'));
   }
 }

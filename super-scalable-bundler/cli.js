@@ -14,8 +14,10 @@ const cli = meow({
   `,
 });
 
-let entryFilePath = path.join(process.cwd(), cli.input[0]);
+//let entryFilePath = path.join(process.cwd(), cli.input[0]);
 
-let bundler = new Bundler(entryFilePath);
+let entryRequest = cli.input[0].startsWith('./') ? cli.input[0] : `./${cli.input[0]}`;
+
+let bundler = new Bundler(entryRequest);
 
 bundler.bundle();
