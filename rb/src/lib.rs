@@ -86,12 +86,12 @@ impl Bundler {
 
         for module_request in deps {
             let src_dir = path.parent().unwrap();
-            let dependency_path = resolve_from(src_dir, module_request);
+            let dependency_path = resolve_from(src_dir, &module_request);
 
-            let dependency_asset = self
-                .asset_graph
-                .entry(dependency_path.clone())
-                .or_insert_with(|| self.create_asset(dependency_path));
+            let dependency_asset = match self.asset_graph.get(&dependency_path) {
+                Some(e) => e.clone(),
+                None => self.create_asset(dependency_path),
+            };
 
             dependency_map.insert(module_request, dependency_asset.clone());
         }
@@ -125,9 +125,7 @@ impl Bundler {
                 }},
                 {},
               ],",
-                asset.id,
-                asset.code.borrow(),
-                mapping_json
+                asset.id, code, mapping_json
             ));
         });
 
@@ -177,8 +175,8 @@ impl Bundler {
     }
 }
 
-fn resolve_from(path: &Path, specifier: Atom) -> PathBuf {
-    let mut resolver = oxc_resolver::Resolver::new(Default::default());
+fn resolve_from(path: &Path, specifier: &str) -> PathBuf {
+    let resolver = oxc_resolver::Resolver::new(Default::default());
     let r = resolver.resolve(path, &specifier).unwrap_or_else(|err| {
         panic!(
             "failed to resolve specifier: {} from {}: {:?}",
