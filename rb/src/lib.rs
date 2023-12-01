@@ -44,7 +44,9 @@ impl Bundler {
     fn process_assets(&mut self) {
         self.create_asset(self.entry_file_path.clone());
 
-        self.process_queue.on_idle()
+        while let Some(asset) = self.process_queue.queue.pop() {
+            self.process_asset(asset);
+        }
     }
 
     fn add_to_process_queue(&mut self, asset: Rc<Asset>) {
@@ -220,12 +222,6 @@ struct ProcessQueue {
 }
 
 impl ProcessQueue {
-    fn on_idle(&mut self) {
-        while let Some(asset) = self.queue.pop() {
-            b.process_asset(asset);
-        }
-    }
-
     fn add(&mut self, asset: Rc<Asset>) {
         self.queue.push(asset);
     }
