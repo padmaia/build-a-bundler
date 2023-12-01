@@ -66,7 +66,7 @@ impl Bundler {
         return asset;
     }
 
-    fn process_asset(&mut self, asset: Arc<Asset>) {
+    fn process_asset(&mut self, asset: Rc<Asset>) {
         let path = asset.path.clone();
         let fm = self.cm.load_file(&path).expect("failed to load file");
         let ast = parse_file_as_module(
@@ -205,10 +205,28 @@ impl Visit for ImportVisitor {
     }
 }
 
+#[derive(Debug)]
 struct Asset {
     id: u64,
     path: PathBuf,
 
     code: RefCell<String>,
     dependency_map: RefCell<HashMap<Atom, Rc<Asset>>>,
+}
+
+#[derive(Debug, Default)]
+struct ProcessQueue {
+    queue: Vec<Rc<Asset>>,
+}
+
+impl ProcessQueue {
+    fn on_idle(&mut self) {
+        while let Some(asset) = self.queue.pop() {
+            b.process_asset(asset);
+        }
+    }
+
+    fn add(&mut self, asset: Rc<Asset>) {
+        self.queue.push(asset);
+    }
 }
