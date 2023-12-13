@@ -164,9 +164,8 @@ impl Bundler {
           }}
   
           require(0);
-        }})({})
+        }})({{{modules}}})
         ",
-            modules
         );
 
         create_dir_all("dist").expect("failed to create dist directory");
