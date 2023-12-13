@@ -21,6 +21,8 @@ use swc_ecma_ast::{EsVersion, ImportDecl, Module, Program};
 use swc_ecma_parser::parse_file_as_module;
 use swc_ecma_visit::Visit;
 
+const TARGET_ES_VERSION: EsVersion = EsVersion::Es5;
+
 pub struct Bundler {
     /// Interner for `(FileName, start_loc, end_loc)`
     cm: Arc<SourceMap>,
@@ -179,7 +181,7 @@ impl Bundler {
                 &Options {
                     config: Config {
                         jsc: JscConfig {
-                            target: Some(EsVersion::Es5),
+                            target: Some(TARGET_ES_VERSION),
                             ..Default::default()
                         },
                         module: Some(swc::config::ModuleConfig::CommonJs(
