@@ -9,9 +9,11 @@ edition = "2021"
 oxc_resolver = "0.5.5"
 serde = "1.0.193"
 serde_json = "1.0.108"
+swc = "0.270.0"
 swc_atoms = "0.6.5"
-swc_common = { version = "0.33.10", features = ["concurrent"] }
+swc_common = { version = "0.33.10", features = ["concurrent", "tty-emitter"] }
 swc_ecma_ast = "0.110.11"
 swc_ecma_codegen = "0.146.37"
 swc_ecma_parser = "0.141.29"
+swc_ecma_transforms = { version = "0.227.0", features = ["module"] }
 swc_ecma_visit = "0.96.11"

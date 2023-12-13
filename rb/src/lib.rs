@@ -7,16 +7,24 @@ use std::{
     sync::Arc,
 };
 
+use swc::{
+    config::{Config, JscConfig, Options},
+    Compiler,
+};
 use swc_atoms::Atom;
-use swc_common::SourceMap;
-use swc_ecma_ast::{EsVersion, ImportDecl, Module};
-use swc_ecma_codegen::{text_writer::JsWriter, Emitter};
+use swc_common::{
+    errors::{ColorConfig, Handler},
+    SourceMap,
+};
+use swc_ecma_ast::{EsVersion, ImportDecl, Module, Program};
+
 use swc_ecma_parser::parse_file_as_module;
 use swc_ecma_visit::Visit;
 
 pub struct Bundler {
     /// Interner for `(FileName, start_loc, end_loc)`
     cm: Arc<SourceMap>,
+    compiler: Compiler,
 
     entry_file_path: PathBuf,
     /// PQueue
@@ -27,8 +35,11 @@ pub struct Bundler {
 
 impl Bundler {
     pub fn new(entry_file_path: PathBuf) -> Self {
+        let cm = Arc::new(SourceMap::default());
+        let compiler = Compiler::new(cm.clone());
         Self {
-            cm: Default::default(),
+            cm,
+            compiler,
             entry_file_path,
             process_queue: Default::default(),
             asset_graph: Default::default(),
@@ -96,7 +107,7 @@ impl Bundler {
             dependency_map.insert(module_request, dependency_asset.clone());
         }
 
-        let code = self.print_js(&ast);
+        let code = self.print_js(ast);
 
         *asset.code.borrow_mut() = code;
         *asset.dependency_map.borrow_mut() = dependency_map;
@@ -158,20 +169,33 @@ impl Bundler {
         return result;
     }
 
-    fn print_js(&mut self, m: &Module) -> String {
-        let mut buf = vec![];
-        {
-            let mut emitter = Emitter {
-                cfg: swc_ecma_codegen::Config::default(),
-                cm: self.cm.clone(),
-                comments: None,
-                wr: Box::new(JsWriter::new(self.cm.clone(), "\n", &mut buf, None)),
-            };
+    fn print_js(&mut self, m: Module) -> String {
+        let h = Handler::with_tty_emitter(ColorConfig::Always, true, false, Some(self.cm.clone()));
+        let m = self
+            .compiler
+            .process_js(
+                &h,
+                Program::Module(m.clone()),
+                &Options {
+                    config: Config {
+                        jsc: JscConfig {
+                            target: Some(EsVersion::Es5),
+                            ..Default::default()
+                        },
+                        module: Some(swc::config::ModuleConfig::CommonJs(
+                            swc_ecma_transforms::modules::common_js::Config {
+                                no_interop: true,
+                                ..Default::default()
+                            },
+                        )),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .unwrap();
 
-            emitter.emit_module(m).unwrap();
-        }
-
-        String::from_utf8(buf).expect("swc_ecma_codegen should emit valid utf8")
+        m.code
     }
 }
 
