@@ -14,7 +14,7 @@ use swc::{
 use swc_atoms::Atom;
 use swc_common::{
     errors::{ColorConfig, Handler},
-    SourceMap,
+    Globals, SourceMap, GLOBALS,
 };
 use swc_ecma_ast::{EsVersion, ImportDecl, Module, Program};
 
@@ -27,6 +27,7 @@ pub struct Bundler {
     /// Interner for `(FileName, start_loc, end_loc)`
     cm: Arc<SourceMap>,
     compiler: Compiler,
+    globals: Arc<Globals>,
 
     entry_file_path: PathBuf,
     /// PQueue
@@ -42,6 +43,7 @@ impl Bundler {
         Self {
             cm,
             compiler,
+            globals: Default::default(),
             entry_file_path,
             process_queue: Default::default(),
             asset_graph: Default::default(),
@@ -50,8 +52,10 @@ impl Bundler {
     }
 
     pub fn bundle(&mut self) {
-        self.process_assets();
-        self.package_assets_into_bundles();
+        GLOBALS.set(&self.globals.clone(), || {
+            self.process_assets();
+            self.package_assets_into_bundles();
+        });
     }
 
     fn process_assets(&mut self) {
